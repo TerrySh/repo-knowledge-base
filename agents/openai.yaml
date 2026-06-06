@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo Knowledge Base"
+  short_description: "Generate and maintain repository knowledge bases for agents."
+  default_prompt: "Generate or maintain the knowledge-base for this repository before continuing with code changes."
