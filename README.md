@@ -31,7 +31,7 @@ Copy the skill folder into your Codex skills directory:
 ```powershell
 Copy-Item -Recurse -Force `
   .\repo-knowledge-base `
-  C:\Users\tianl\.codex\skills\repo-knowledge-base
+  "$env:USERPROFILE\.codex\skills\repo-knowledge-base"
 ```
 
 Open a new Codex thread after installing so the skill metadata can be discovered.
