@@ -1,6 +1,7 @@
 param(
     [string]$Root = ".",
     [switch]$Force,
+    [switch]$Initialize,
     [int]$ModuleDepth = 1
 )
 
@@ -208,6 +209,27 @@ function Get-DetectedModules {
     return @($set) | Sort-Object
 }
 
+function Get-SourceFileCount {
+    param([string]$RepoRoot)
+    $count = 0
+    foreach ($file in Get-ChildItem -Force -Recurse -Path $RepoRoot -File -ErrorAction SilentlyContinue) {
+        $skip = $false
+        foreach ($part in $file.FullName.Substring($RepoRoot.Length).Split([System.IO.Path]::DirectorySeparatorChar)) {
+            if ($IgnoreDirs -contains $part) {
+                $skip = $true
+                break
+            }
+        }
+        if ($skip) {
+            continue
+        }
+        if ($SourceExtensions -contains $file.Extension) {
+            $count += 1
+        }
+    }
+    return $count
+}
+
 function Join-LinesOrTodo {
     param([string[]]$Items, [string]$Format = '- `{0}`')
     if ($Items.Count -eq 0) {
@@ -228,6 +250,12 @@ For any code task:
 3. Read ``repo-map.md``.
 4. Read affected module specs under ``modules/``.
 
+For new projects:
+1. Read ``product-brief.md``.
+2. Read ``roadmap.md``.
+3. Read ``architecture.md``.
+4. Read ``coding-standards.md``.
+
 For architecture changes:
 1. Read ``architecture.md``.
 2. Read affected module ``design.md`` and ``decisions.md``.
@@ -242,6 +270,68 @@ For API changes:
 After meaningful code changes, update affected knowledge-base files before finishing.
 
 Do not update knowledge-base files for formatting-only changes, trivial copy changes, or edits with no behavioral meaning.
+"@
+}
+
+function Get-ProductBriefContent {
+@"
+# Product Brief
+
+## Status
+
+Planned: This document may describe intended behavior before implementation exists.
+
+## Target Users
+
+TODO
+
+## Problem Statement
+
+TODO
+
+## Product Goals
+
+TODO
+
+## Core Business Concepts
+
+TODO
+
+## Assumptions
+
+TODO
+
+## Open Questions
+
+TODO
+"@
+}
+
+function Get-RoadmapContent {
+@"
+# Roadmap
+
+## Status Legend
+
+- Planned: intended but not implemented.
+- In Progress: partially implemented.
+- Implemented: present in the codebase and verified.
+
+## Initial Milestone
+
+TODO
+
+## Planned Features
+
+- Planned: TODO
+
+## Planned Modules
+
+- Planned: TODO
+
+## Follow-ups
+
+TODO
 "@
 }
 
@@ -612,6 +702,8 @@ $FoundConfigs = Get-ExistingFiles $RepoRoot $Configs
 $Frameworks = Get-DetectedFrameworks $RepoRoot
 $Scripts = Get-PackageScripts $RepoRoot
 $Modules = Get-DetectedModules $RepoRoot ([Math]::Max($ModuleDepth, 1))
+$SourceFileCount = Get-SourceFileCount $RepoRoot
+$IncludeInitializeDocs = $Initialize -or ($SourceFileCount -le 3)
 
 $Created = New-Object System.Collections.Generic.List[string]
 
@@ -626,6 +718,22 @@ $globalFiles = @(
     @{ Path = Join-Path $Kb "testing.md"; Content = Get-TestingContent },
     @{ Path = Join-Path $Kb "modules.md"; Content = Get-ModulesContent $Modules }
 )
+
+if ($IncludeInitializeDocs) {
+    $globalFiles = @(
+        @{ Path = Join-Path $Kb "README.md"; Content = Get-ReadmeContent },
+        @{ Path = Join-Path $Kb "product-brief.md"; Content = Get-ProductBriefContent },
+        @{ Path = Join-Path $Kb "roadmap.md"; Content = Get-RoadmapContent },
+        @{ Path = Join-Path $Kb "repo-map.md"; Content = Get-RepoMapContent $RepoRoot $FoundManifests $FoundConfigs $Modules },
+        @{ Path = Join-Path $Kb "tech-stack.md"; Content = Get-TechStackContent $FoundManifests $FoundConfigs $Frameworks },
+        @{ Path = Join-Path $Kb "commands.md"; Content = Get-CommandsContent $Scripts },
+        @{ Path = Join-Path $Kb "coding-standards.md"; Content = Get-CodingStandardsContent },
+        @{ Path = Join-Path $Kb "workflows.md"; Content = Get-WorkflowsContent },
+        @{ Path = Join-Path $Kb "architecture.md"; Content = Get-ArchitectureContent },
+        @{ Path = Join-Path $Kb "testing.md"; Content = Get-TestingContent },
+        @{ Path = Join-Path $Kb "modules.md"; Content = Get-ModulesContent $Modules }
+    )
+}
 
 foreach ($file in $globalFiles) {
     if (Write-KbFile $file.Path $file.Content) {
@@ -653,6 +761,8 @@ foreach ($module in $Modules) {
 
 Write-Output "Knowledge base path: $Kb"
 Write-Output "Detected modules: $($Modules.Count)"
+Write-Output "Source files counted: $SourceFileCount"
+Write-Output "Initialize docs included: $IncludeInitializeDocs"
 Write-Output "Files created or overwritten: $($Created.Count)"
 foreach ($path in $Created) {
     Write-Output "- $(Get-RelativePath $path $RepoRoot)"

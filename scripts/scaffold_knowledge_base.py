@@ -262,6 +262,18 @@ def detect_modules(root, module_depth):
     return sorted(modules)
 
 
+def count_source_files(root):
+    count = 0
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        if any(part in IGNORE_DIRS for part in path.parts):
+            continue
+        if path.suffix in SOURCE_EXTENSIONS:
+            count += 1
+    return count
+
+
 def repo_map_content(root, manifests, configs, modules):
     top_dirs = [
         rel(path, root)
@@ -287,6 +299,12 @@ def readme_content():
 
 ## Agent Reading Order
 
+For new projects:
+1. Read `product-brief.md`.
+2. Read `roadmap.md`.
+3. Read `architecture.md`.
+4. Read `coding-standards.md`.
+
 For any code task:
 1. Read `commands.md`.
 2. Read `coding-standards.md`.
@@ -307,6 +325,66 @@ For API changes:
 After meaningful code changes, update affected knowledge-base files before finishing.
 
 Do not update knowledge-base files for formatting-only changes, trivial copy changes, or edits with no behavioral meaning.
+"""
+
+
+def product_brief_content():
+    return """# Product Brief
+
+## Status
+
+Planned: This document may describe intended behavior before implementation exists.
+
+## Target Users
+
+TODO
+
+## Problem Statement
+
+TODO
+
+## Product Goals
+
+TODO
+
+## Core Business Concepts
+
+TODO
+
+## Assumptions
+
+TODO
+
+## Open Questions
+
+TODO
+"""
+
+
+def roadmap_content():
+    return """# Roadmap
+
+## Status Legend
+
+- Planned: intended but not implemented.
+- In Progress: partially implemented.
+- Implemented: present in the codebase and verified.
+
+## Initial Milestone
+
+TODO
+
+## Planned Features
+
+- Planned: TODO
+
+## Planned Modules
+
+- Planned: TODO
+
+## Follow-ups
+
+TODO
 """
 
 
@@ -587,6 +665,7 @@ def main():
     parser = argparse.ArgumentParser(description="Scaffold repository knowledge-base files.")
     parser.add_argument("--root", default=".", help="Repository root. Defaults to current directory.")
     parser.add_argument("--force", action="store_true", help="Overwrite existing generated files.")
+    parser.add_argument("--initialize", action="store_true", help="Include new-project docs such as product brief and roadmap.")
     parser.add_argument("--module-depth", type=int, default=1, help="Module detection depth under common module roots.")
     args = parser.parse_args()
 
@@ -600,9 +679,10 @@ def main():
     frameworks = detect_frameworks(root)
     scripts = package_scripts(root)
     modules = detect_modules(root, max(args.module_depth, 1))
+    source_file_count = count_source_files(root)
+    include_initialize_docs = args.initialize or source_file_count <= 3
 
-    created = []
-    for path, content in [
+    global_files = [
         (kb / "README.md", readme_content()),
         (kb / "repo-map.md", repo_map_content(root, manifests, configs, modules)),
         (kb / "tech-stack.md", tech_stack_content(manifests, configs, frameworks)),
@@ -612,7 +692,14 @@ def main():
         (kb / "architecture.md", architecture_content()),
         (kb / "testing.md", testing_content()),
         (kb / "modules.md", modules_content(modules)),
-    ]:
+    ]
+
+    if include_initialize_docs:
+        global_files.insert(1, (kb / "product-brief.md", product_brief_content()))
+        global_files.insert(2, (kb / "roadmap.md", roadmap_content()))
+
+    created = []
+    for path, content in global_files:
         if write_file(path, content, force=args.force):
             created.append(path)
 
@@ -632,6 +719,8 @@ def main():
 
     print(f"Knowledge base path: {kb}")
     print(f"Detected modules: {len(modules)}")
+    print(f"Source files counted: {source_file_count}")
+    print(f"Initialize docs included: {include_initialize_docs}")
     print(f"Files created or overwritten: {len(created)}")
     for path in created:
         print(f"- {path.relative_to(root).as_posix()}")
